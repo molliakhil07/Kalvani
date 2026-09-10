@@ -1,25 +1,92 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { allProducts } from "../data/products";
+
 import { useCart } from "../context/CartContext";
+import { useProducts } from "../context/ProductContext";
 
 function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { addToCart } = useCart();
 
-  const product = allProducts.find(
+  const { addToCart } = useCart();
+  const { products, loading, error } = useProducts();
+
+  const [isImageOpen, setIsImageOpen] = useState(false);
+  const [isAddedToCart, setIsAddedToCart] = useState(false);
+
+  const product = products.find(
     (item) => item.id === Number(id)
   );
+
+  /* ================= LOADING ================= */
+
+  if (loading) {
+    return (
+      <main className="product-not-found">
+        <div className="product-not-found-content">
+
+          <p className="section-label">
+            KALVANI
+          </p>
+
+          <h1>
+            Loading Product...
+          </h1>
+
+          <p>
+            Please wait while we load the saree details.
+          </p>
+
+        </div>
+      </main>
+    );
+  }
+
+  /* ================= ERROR ================= */
+
+  if (error) {
+    return (
+      <main className="product-not-found">
+        <div className="product-not-found-content">
+
+          <p className="section-label">
+            KALVANI
+          </p>
+
+          <h1>
+            Unable to Load Product
+          </h1>
+
+          <p>
+            {error}
+          </p>
+
+          <Link
+            to="/shop"
+            className="back-to-shop"
+          >
+            ← Back to Shop
+          </Link>
+
+        </div>
+      </main>
+    );
+  }
+
+  /* ================= PRODUCT NOT FOUND ================= */
 
   if (!product) {
     return (
       <main className="product-not-found">
         <div className="product-not-found-content">
+
           <p className="section-label">
-            KALAVANI
+            KALVANI
           </p>
 
-          <h1>Product Not Found</h1>
+          <h1>
+            Product Not Found
+          </h1>
 
           <p>
             The saree you are looking for could not
@@ -32,19 +99,25 @@ function ProductDetails() {
           >
             ← Back to Shop
           </Link>
+
         </div>
       </main>
     );
   }
 
+  /* ================= WHATSAPP ================= */
+
   const whatsappMessage = encodeURIComponent(
-    `Hi Kalavani, I'm interested in the ${product.name} (Product ID: KLV${product.id}). Is it available?`
+    `Hi Kalvani, I'm interested in the ${product.name} (Product ID: KLV${product.id}). Is it available?`
   );
 
   const whatsappUrl =
-    `https://wa.me/?text=${whatsappMessage}`;
+  `https://wa.me/918519914348?text=${whatsappMessage}`;
+
+  /* ================= ADD TO CART ================= */
 
   const handleAddToCart = () => {
+
     addToCart({
       id: product.id,
       name: product.name,
@@ -53,14 +126,16 @@ function ProductDetails() {
       image: product.image,
     });
 
-    navigate("/cart");
+    setIsAddedToCart(true);
   };
 
   return (
     <main className="product-details-page">
 
-      {/* BREADCRUMB */}
+      {/* ================= BREADCRUMB ================= */}
+
       <div className="product-breadcrumb">
+
         <Link to="/">
           Home
         </Link>
@@ -76,67 +151,95 @@ function ProductDetails() {
         <span>
           {product.name}
         </span>
+
       </div>
+
 
       <div className="product-details-container">
 
-        {/* IMAGE */}
+        {/* ================= IMAGE ================= */}
+
         <div className="product-details-image-wrapper">
 
-          <div className="product-details-image">
+          <div
+            className="product-details-image"
+            onClick={() => setIsImageOpen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+
+              if (
+                event.key === "Enter" ||
+                event.key === " "
+              ) {
+                setIsImageOpen(true);
+              }
+
+            }}
+            aria-label={`View ${product.name} image`}
+          >
+
             <img
               src={product.image}
               alt={product.name}
             />
+
+            <span className="image-zoom-hint">
+              Click to Zoom
+            </span>
+
           </div>
 
+
           <p className="product-image-caption">
-            Authentic Kanchipuram Silk
+            Authentic Kanchipuram Sarees
           </p>
 
         </div>
 
 
-        {/* INFORMATION */}
+        {/* ================= INFORMATION ================= */}
+
         <div className="product-details-info">
 
           <p className="product-details-category">
             {product.category}
           </p>
 
+
           <h1>
             {product.name}
           </h1>
+
 
           <p className="product-details-price">
             ₹{product.price.toLocaleString("en-IN")}
           </p>
 
+
           <div className="product-divider"></div>
 
+
           <p className="product-description">
-            Discover the timeless beauty of authentic
-            Kanchipuram silk weaving. This saree reflects
-            skilled craftsmanship, traditional artistry
-            and elegant design passed down through
-            generations.
+
+            {product.category
+              .toLowerCase()
+              .includes("cotton")
+
+              ? "Discover the timeless beauty of authentic Kanchipuram cotton weaving. This saree reflects skilled craftsmanship, traditional artistry and elegant design passed down through generations."
+
+              : "Discover the timeless beauty of authentic Kanchipuram silk weaving. This saree reflects skilled craftsmanship, traditional artistry and elegant design passed down through generations."
+            }
+
           </p>
 
 
-          {/* SPECIFICATIONS */}
+          {/* ================= SPECIFICATIONS ================= */}
+
           <div className="product-specifications">
 
             <div>
-              <span>
-                Craft
-              </span>
 
-              <strong>
-                Kanchipuram Silk
-              </strong>
-            </div>
-
-            <div>
               <span>
                 Category
               </span>
@@ -144,9 +247,12 @@ function ProductDetails() {
               <strong>
                 {product.category}
               </strong>
+
             </div>
 
+
             <div>
+
               <span>
                 Availability
               </span>
@@ -154,12 +260,14 @@ function ProductDetails() {
               <strong>
                 Available
               </strong>
+
             </div>
 
           </div>
 
 
-          {/* ACTIONS */}
+          {/* ================= ACTIONS ================= */}
+
           <div className="product-actions">
 
             <button
@@ -167,8 +275,27 @@ function ProductDetails() {
               className="add-cart-button"
               onClick={handleAddToCart}
             >
-              Add to Cart
+
+              {isAddedToCart
+                ? "✓ Added to Cart"
+                : "Add to Cart"
+              }
+
             </button>
+
+
+            {isAddedToCart && (
+
+              <button
+                type="button"
+                className="go-to-cart-button"
+                onClick={() => navigate("/cart")}
+              >
+                Go to Cart →
+              </button>
+
+            )}
+
 
             <a
               href={whatsappUrl}
@@ -192,6 +319,38 @@ function ProductDetails() {
         </div>
 
       </div>
+
+
+      {/* ================= IMAGE LIGHTBOX ================= */}
+
+      {isImageOpen && (
+
+        <div
+          className="product-image-lightbox"
+          onClick={() => setIsImageOpen(false)}
+        >
+
+          <button
+            type="button"
+            className="lightbox-close"
+            onClick={() => setIsImageOpen(false)}
+            aria-label="Close image"
+          >
+            ×
+          </button>
+
+
+          <img
+            src={product.image}
+            alt={product.name}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          />
+
+        </div>
+
+      )}
 
     </main>
   );

@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+
 import {
   WHATSAPP_NUMBER,
   BUSINESS_NAME,
 } from "../config/business";
+
+import { supabase } from "../lib/supabase";
 
 function Cart() {
   const {
@@ -12,6 +15,7 @@ function Cart() {
     cartTotal,
     updateQuantity,
     removeFromCart,
+    clearCart,
   } = useCart();
 
   // Customer details
@@ -19,65 +23,137 @@ function Cart() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
+  const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
 
-  // Create WhatsApp order
-  const createWhatsAppOrder = () => {
-    const cleanPhone = phone.replace(/\D/g, "");
-    const cleanPincode = pincode.replace(/\D/g, "");
+  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [isOrdering, setIsOrdering] = useState(false);
+  const [orderId, setOrderId] = useState<number | null>(null);
 
-    // Validation
-    if (!customerName.trim()) {
-      alert("Please enter your full name.");
-      return;
-    }
+  // =========================================
+  // CREATE WHATSAPP ORDER
+  // =========================================
 
-    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-      alert(
-        "Please enter a valid 10-digit Indian mobile number."
-      );
-      return;
-    }
+  const createWhatsAppOrder = async () => {
+    setIsOrdering(true);
 
-    if (!address.trim()) {
-      alert("Please enter your delivery address.");
-      return;
-    }
+    try {
+      const cleanPhone = phone.replace(/\D/g, "");
+      const cleanPincode = pincode.replace(/\D/g, "");
 
-    if (!city.trim()) {
-      alert("Please enter your city.");
-      return;
-    }
+      // =========================================
+      // VALIDATION
+      // =========================================
 
-    if (!/^\d{6}$/.test(cleanPincode)) {
-      alert("Please enter a valid 6-digit pincode.");
-      return;
-    }
+      if (!customerName.trim()) {
+        alert("Please enter your full name.");
+        return;
+      }
 
-    // Create order items
-    const items = cartItems
-      .map(
-        (item, index) =>
-          `${index + 1}. ${item.name}
+      if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+        alert(
+          "Please enter a valid 10-digit Indian mobile number."
+        );
+        return;
+      }
+
+      if (!address.trim()) {
+        alert("Please enter your delivery address.");
+        return;
+      }
+
+      if (!city.trim()) {
+        alert("Please enter your city.");
+        return;
+      }
+
+      if (!state.trim()) {
+  alert("Please enter your state.");
+  return;
+}
+
+      if (!/^\d{6}$/.test(cleanPincode)) {
+        alert("Please enter a valid 6-digit pincode.");
+        return;
+      }
+
+      // =========================================
+      // PREPARE ORDER ITEMS
+      // =========================================
+
+      const orderItems = cartItems.map((item) => ({
+        product_id: item.id,
+        product_name: item.name,
+        product_price: item.price,
+        quantity: item.quantity,
+        subtotal: item.price * item.quantity,
+      }));
+
+      // =========================================
+      // CREATE ORDER USING SECURE RPC
+      // =========================================
+
+      const { data: orderId, error: orderError } =
+        await supabase.rpc(
+          "create_kalvani_order",
+          {
+            p_customer_name: customerName.trim(),
+            p_customer_phone: cleanPhone,
+            p_address: address.trim(),
+            p_city: city.trim(),
+            p_state: state.trim(),
+            p_pincode: cleanPincode,
+            p_total_amount: cartTotal,
+            p_items: orderItems,
+          }
+        );
+
+      if (orderError) {
+        throw orderError;
+      }
+
+      if (!orderId) {
+        throw new Error(
+          "Order was created but no order ID was returned."
+        );
+      }
+      setOrderId(orderId);
+
+      // =========================================
+      // CREATE WHATSAPP ITEMS
+      // =========================================
+
+      const items = cartItems
+        .map(
+          (item, index) =>
+            `${index + 1}. ${item.name}
    Quantity: ${item.quantity}
    Price: ₹${item.price.toLocaleString("en-IN")}
    Item Total: ₹${(
      item.price * item.quantity
    ).toLocaleString("en-IN")}`
-      )
-      .join("\n\n");
+        )
+        .join("\n\n");
 
-    // Create WhatsApp message
-    const message = `Hi ${BUSINESS_NAME}! I'd like to place an order.
+      // =========================================
+      // CREATE WHATSAPP MESSAGE
+      // =========================================
+
+      const message = `Hi ${BUSINESS_NAME}! I'd like to place an order. 🥻
 
 CUSTOMER DETAILS
 Name: ${customerName.trim()}
 Phone: ${cleanPhone}
 Address: ${address.trim()}
 City: ${city.trim()}
+State: ${state.trim()}
 Pincode: ${cleanPincode}
 
+ORDER ID
+KLV-${orderId}
+
 ORDER DETAILS
+
 ${items}
 
 -------------------------
@@ -86,16 +162,87 @@ Total: ₹${cartTotal.toLocaleString("en-IN")}
 
 Please let me know the availability and delivery details.`;
 
-    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-      message
-    )}`;
+      const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+        message
+      )}`;
 
-    window.open(
-      whatsappUrl,
-      "_blank",
-      "noopener,noreferrer"
-    );
+      // =========================================
+      // OPEN WHATSAPP
+      // =========================================
+
+      window.open(
+        whatsappUrl,
+        "_blank",
+        "noopener,noreferrer"
+      );
+
+      // =========================================
+      // COMPLETE ORDER
+      // =========================================
+
+      clearCart();
+      setOrderPlaced(true);
+    } catch (err) {
+      console.error("Failed to create order:", err);
+
+      alert(
+        "We couldn't place your order right now. Please try again."
+      );
+    } finally {
+      setIsOrdering(false);
+    }
   };
+
+  // =========================================
+  // ORDER SUCCESS
+  // =========================================
+
+  if (orderPlaced) {
+    return (
+      <main className="cart-page order-success-page">
+        <div className="order-success-content">
+
+          <div className="order-success-icon">
+            ✓
+          </div>
+
+          <p className="section-label">
+            KALVANI
+          </p>
+
+          <h1>
+  Your Order Has Been Received!
+</h1>
+
+{orderId && (
+  <p>
+    Order ID: <strong>KLV-{orderId}</strong>
+  </p>
+)}
+
+          <p className="order-success-message">
+            Thank you for shopping with Kalvani.
+            Any updates regarding your order will be
+            shared with you on WhatsApp.
+            Please keep an eye on WhatsApp for order
+            confirmation and delivery updates.
+          </p>
+
+          <p className="happy-shopping">
+            Happy Shopping! ❤️
+          </p>
+
+          <Link
+            to="/shop"
+            className="shop-more-button"
+          >
+            Shop More
+          </Link>
+
+        </div>
+      </main>
+    );
+  }
 
   /* =========================================
      EMPTY CART
@@ -105,6 +252,7 @@ Please let me know the availability and delivery details.`;
     return (
       <main className="cart-page empty-cart">
         <div className="empty-cart-content">
+
           <p className="section-label">
             KALVANI
           </p>
@@ -114,7 +262,7 @@ Please let me know the availability and delivery details.`;
           <p>
             Discover something beautiful from
             our collection of authentic
-            traditional kanchipuram silk sarees.
+            Kanchipuram silk and cotton sarees.
           </p>
 
           <Link
@@ -123,6 +271,7 @@ Please let me know the availability and delivery details.`;
           >
             Explore Sarees
           </Link>
+
         </div>
       </main>
     );
@@ -137,9 +286,10 @@ Please let me know the availability and delivery details.`;
       <div className="cart-container">
 
         {/* HEADER */}
+
         <div className="cart-header">
           <p className="section-label">
-            KALAVANI
+            KALVANI
           </p>
 
           <h1>Your Cart</h1>
@@ -160,12 +310,14 @@ Please let me know the availability and delivery details.`;
               >
 
                 {/* PRODUCT IMAGE */}
+
                 <img
                   src={item.image}
                   alt={item.name}
                 />
 
                 {/* PRODUCT INFORMATION */}
+
                 <div className="cart-item-info">
 
                   <p className="cart-item-category">
@@ -181,6 +333,7 @@ Please let me know the availability and delivery details.`;
                   </p>
 
                   {/* QUANTITY */}
+
                   <div className="cart-quantity">
 
                     <button
@@ -216,6 +369,7 @@ Please let me know the availability and delivery details.`;
                   </div>
 
                   {/* REMOVE */}
+
                   <button
                     type="button"
                     className="remove-item"
@@ -229,6 +383,7 @@ Please let me know the availability and delivery details.`;
                 </div>
 
                 {/* ITEM TOTAL */}
+
                 <div className="cart-item-total">
                   ₹{(
                     item.price * item.quantity
@@ -264,9 +419,7 @@ Please let me know the availability and delivery details.`;
                   type="text"
                   value={customerName}
                   onChange={(e) =>
-                    setCustomerName(
-                      e.target.value
-                    )
+                    setCustomerName(e.target.value)
                   }
                   placeholder="Enter your full name"
                   autoComplete="name"
@@ -327,6 +480,23 @@ Please let me know the availability and delivery details.`;
               </div>
 
               <div className="form-group">
+  <label htmlFor="state">
+    State
+  </label>
+
+  <input
+    id="state"
+    type="text"
+    value={state}
+    onChange={(e) =>
+      setState(e.target.value)
+    }
+    placeholder="Enter your state"
+    autoComplete="address-level1"
+  />
+</div>
+
+              <div className="form-group">
                 <label htmlFor="pincode">
                   Pincode
                 </label>
@@ -356,15 +526,13 @@ Please let me know the availability and delivery details.`;
             <div className="order-summary-row">
 
               <span>
-                Items
-              </span>
-
-              <span>
+                Items (
                 {cartItems.reduce(
                   (total, item) =>
                     total + item.quantity,
                   0
                 )}
+                )
               </span>
 
             </div>
@@ -413,8 +581,11 @@ Please let me know the availability and delivery details.`;
               type="button"
               className="checkout-button"
               onClick={createWhatsAppOrder}
+              disabled={isOrdering}
             >
-              Order on WhatsApp
+              {isOrdering
+                ? "Preparing Order..."
+                : "Order on WhatsApp"}
             </button>
 
             {/* CONTINUE SHOPPING */}
