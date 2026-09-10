@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useState,
+  useEffect,
 } from "react";
 
 import type { ReactNode } from "react";
@@ -35,32 +36,80 @@ const CartContext =
     undefined
   );
 
+const CART_STORAGE_KEY = "kalvani_cart";
+
 export function CartProvider({
   children,
 }: {
   children: ReactNode;
 }) {
+  // Load cart from localStorage when the app starts
   const [cartItems, setCartItems] =
-    useState<CartItem[]>([]);
+    useState<CartItem[]>(() => {
+      try {
+        const savedCart =
+          localStorage.getItem(CART_STORAGE_KEY);
+
+        if (!savedCart) {
+          return [];
+        }
+
+        const parsedCart = JSON.parse(savedCart);
+
+        return Array.isArray(parsedCart)
+          ? parsedCart
+          : [];
+      } catch (error) {
+        console.error(
+          "Failed to load cart:",
+          error
+        );
+
+        return [];
+      }
+    });
+
+  // Save cart whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        CART_STORAGE_KEY,
+        JSON.stringify(cartItems)
+      );
+
+      console.log(
+        "Cart saved:",
+        cartItems
+      );
+    } catch (error) {
+      console.error(
+        "Failed to save cart:",
+        error
+      );
+    }
+  }, [cartItems]);
 
   // Add product to cart
   const addToCart = (
     item: Omit<CartItem, "quantity">
   ) => {
     setCartItems((currentItems) => {
-      const existingItem = currentItems.find(
-        (cartItem) => cartItem.id === item.id
-      );
+      const existingItem =
+        currentItems.find(
+          (cartItem) =>
+            cartItem.id === item.id
+        );
 
       if (existingItem) {
-        return currentItems.map((cartItem) =>
-          cartItem.id === item.id
-            ? {
-                ...cartItem,
-                quantity:
-                  cartItem.quantity + 1,
-              }
-            : cartItem
+        return currentItems.map(
+          (cartItem) =>
+            cartItem.id === item.id
+              ? {
+                  ...cartItem,
+                  quantity:
+                    cartItem.quantity + 1,
+                }
+              : cartItem
         );
       }
 
@@ -102,19 +151,17 @@ export function CartProvider({
     );
   };
 
-  // Empty the entire cart
+  // Empty entire cart
   const clearCart = () => {
     setCartItems([]);
   };
 
-  // Total number of products
   const cartCount = cartItems.reduce(
     (total, item) =>
       total + item.quantity,
     0
   );
 
-  // Total price
   const cartTotal = cartItems.reduce(
     (total, item) =>
       total +
