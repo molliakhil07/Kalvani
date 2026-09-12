@@ -454,7 +454,7 @@ function Home() {
 
             {/* DEVELOPER */}
             <a
-              href="mailto:molliakhil07@gmail.com"
+              href="https://akhil-portfolio-beta-tawny.vercel.app/"
             >
               <span>
                 Molli Akhil kumar
